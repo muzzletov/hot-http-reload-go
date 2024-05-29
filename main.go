@@ -41,9 +41,26 @@ type LinkedList struct {
 var reload = make(chan bool, 1)
 
 const fragment = `<script>
-const socket = new WebSocket("ws://localhost:8080/ws");
-socket.onclose = function(event) {location.reload(true)}}
+const eventSource = new EventSource('http://localhost:8080/events');
+eventSource.onmessage = (event) => {
+	eventSource.close();
+	location.reload(true);
+};
 </script>`
+
+func eventsHandler(w http.ResponseWriter, r *http.Request) {
+	// Set CORS headers to allow all origins. You may want to restrict this to specific origins in a production environment.
+	w.Header().Set("Access-Control-Allow-Origin", "*")
+	w.Header().Set("Access-Control-Expose-Headers", "Content-Type")
+
+	w.Header().Set("Content-Type", "text/event-stream")
+	w.Header().Set("Cache-Control", "no-cache")
+	w.Header().Set("Connection", "keep-alive")
+	<-reload
+	w.Write([]byte("data: null\n\n"))
+	w.(http.Flusher).Flush()
+	<-r.Context().Done()
+}
 
 func handleWatcherEvents(c *Context) {
 	for {
@@ -191,7 +208,7 @@ func main() {
 		}
 	})
 
-	http.Handle("/ws", websocket.Handler(handleWebSocket))
+	http.HandleFunc("/events", eventsHandler)
 
 	addr := ":8080"
 
@@ -200,9 +217,4 @@ func main() {
 	if err != nil {
 		log.Fatal(err)
 	}
-
-}
-
-func handleWebSocket(ws *websocket.Conn) {
-	<-reload
 }
