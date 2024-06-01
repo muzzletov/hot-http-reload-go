@@ -8,6 +8,7 @@ import (
 	"net/http"
 	"os"
 	"sync"
+	"time"
 )
 
 type Node struct {
@@ -23,19 +24,16 @@ type File struct {
 
 type Context struct {
 	watcher         *fsnotify.Watcher
-	wg              *sync.WaitGroup
+	waitGroup       *sync.WaitGroup
 	config          *Configuration
 	interruptHandle chan os.Signal
 	done            chan bool
 	cache           map[string]File
+	timer           *time.Timer
 }
 
 type Configuration struct {
 	directory string
-}
-
-type LinkedList struct {
-	head *Node
 }
 
 var reload = make(chan bool, 1)
@@ -47,9 +45,9 @@ eventSource.onmessage = (event) => {
 	location.reload(true);
 };
 </script>`
+const durationOfTime = time.Duration(500) * time.Millisecond
 
 func eventsHandler(w http.ResponseWriter, r *http.Request) {
-	// Set CORS headers to allow all origins. You may want to restrict this to specific origins in a production environment.
 	w.Header().Set("Access-Control-Allow-Origin", "*")
 	w.Header().Set("Access-Control-Expose-Headers", "Content-Type")
 
@@ -60,6 +58,19 @@ func eventsHandler(w http.ResponseWriter, r *http.Request) {
 	w.Write([]byte("data: null\n\n"))
 	w.(http.Flusher).Flush()
 	<-r.Context().Done()
+}
+
+func resetTimer(c *Context) {
+	c.timer = nil
+	reload <- true
+}
+
+func updateTimer(c *Context) {
+	if c.timer != nil {
+		c.timer.Stop()
+	}
+
+	c.timer = time.AfterFunc(durationOfTime, func() { resetTimer(c) })
 }
 
 func handleWatcherEvents(c *Context) {
@@ -75,8 +86,8 @@ func handleWatcherEvents(c *Context) {
 
 			if writeEvent || createEvent {
 				mappedFilename := event.Name[len(c.config.directory)+1:]
-				createContent(c, mappedFilename)
-				reload <- true
+				addFragment(c, mappedFilename)
+				updateTimer(c)
 			}
 		case _, ok := <-c.watcher.Errors:
 			if !ok {
@@ -94,7 +105,7 @@ func createContext(directory string) (*Context, error) {
 	context.interruptHandle = make(chan os.Signal, 1)
 	context.done = make(chan bool, 1)
 	context.watcher = watcher
-	context.wg = new(sync.WaitGroup)
+	context.waitGroup = new(sync.WaitGroup)
 	context.config = &Configuration{directory: directory}
 	return context, err
 }
@@ -117,13 +128,13 @@ func cache(c *Context, files []string) {
 	for _, file := range files {
 		if endswith(file, suffix) {
 			println("caching", file)
-			createContent(c, file)
+			addFragment(c, file)
 
 		}
 	}
 }
 
-func createContent(c *Context, file string) {
+func addFragment(c *Context, file string) {
 	dat, err := os.ReadFile(c.config.directory + "/" + file)
 
 	if err != nil {
