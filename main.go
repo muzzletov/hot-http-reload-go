@@ -143,7 +143,7 @@ func addFragment(c *Context, file string) {
 
 	data := string(dat)
 
-	p := parseur.NewParser(data)
+	p := parseur.NewParser(&data)
 	tags := p.GetTags()
 
 	for _, t := range tags {
