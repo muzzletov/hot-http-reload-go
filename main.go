@@ -1,21 +1,15 @@
 package main
 
 import (
-	"WnS/parseur"
 	"github.com/fsnotify/fsnotify"
-	"golang.org/x/net/websocket"
+	"github.com/muzzletov/parseur"
 	"log"
 	"net/http"
 	"os"
+	"slices"
 	"sync"
 	"time"
 )
-
-type Node struct {
-	conn *websocket.Conn
-	prev *Node
-	next *Node
-}
 
 type File struct {
 	content []byte
@@ -54,9 +48,17 @@ func eventsHandler(w http.ResponseWriter, r *http.Request) {
 	w.Header().Set("Content-Type", "text/event-stream")
 	w.Header().Set("Cache-Control", "no-cache")
 	w.Header().Set("Connection", "keep-alive")
+
 	<-reload
-	w.Write([]byte("data: null\n\n"))
+
+	_, err := w.Write([]byte("data: null\n\n"))
+
+	if err != nil {
+		return
+	}
+
 	w.(http.Flusher).Flush()
+
 	<-r.Context().Done()
 }
 
@@ -107,6 +109,7 @@ func createContext(directory string) (*Context, error) {
 	context.watcher = watcher
 	context.waitGroup = new(sync.WaitGroup)
 	context.config = &Configuration{directory: directory}
+
 	return context, err
 }
 
@@ -125,6 +128,7 @@ func enumerateDir(c *Context) []string {
 
 func cache(c *Context, files []string) {
 	suffix := []string{".html"}
+
 	for _, file := range files {
 		if endswith(file, suffix) {
 			println("caching", file)
@@ -135,20 +139,25 @@ func cache(c *Context, files []string) {
 }
 
 func addFragment(c *Context, file string) {
-	dat, err := os.ReadFile(c.config.directory + "/" + file)
+	data, err := os.ReadFile(c.config.directory + "/" + file)
 
 	if err != nil {
 		return
 	}
 
-	data := string(dat)
-
-	p := parseur.NewParser(&data)
-	tags := p.GetTags()
+	p := parseur.NewParser(&data, false, nil)
+	tags := p.Parsed()
 
 	for _, t := range tags {
 		if t.Name == "head" {
-			c.cache[file] = File{[]byte(data[:t.Body.Start] + fragment + data[t.Body.Start:]), sync.Mutex{}}
+			c.cache[file] = File{
+				slices.Concat(
+					nil,
+					data[:t.Body.Start],
+					[]byte(fragment),
+					data[t.Body.Start:]),
+				sync.Mutex{},
+			}
 			break
 		}
 	}
