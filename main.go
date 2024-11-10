@@ -44,7 +44,6 @@ const durationOfTime = time.Duration(500) * time.Millisecond
 func eventsHandler(w http.ResponseWriter, r *http.Request) {
 	w.Header().Set("Access-Control-Allow-Origin", "*")
 	w.Header().Set("Access-Control-Expose-Headers", "Content-Type")
-
 	w.Header().Set("Content-Type", "text/event-stream")
 	w.Header().Set("Cache-Control", "no-cache")
 	w.Header().Set("Connection", "keep-alive")
@@ -146,19 +145,16 @@ func addFragment(c *Context, file string) {
 	}
 
 	p := parseur.NewParser(&data, false, nil)
-	tags := p.Parsed()
+	tag := p.Query("head").First()
 
-	for _, t := range tags {
-		if t.Name == "head" {
-			c.cache[file] = File{
-				slices.Concat(
-					nil,
-					data[:t.Body.Start],
-					[]byte(fragment),
-					data[t.Body.Start:]),
-				sync.Mutex{},
-			}
-			break
+	if tag != nil {
+		c.cache[file] = File{
+			slices.Concat(
+				nil,
+				data[:tag.Body.Start],
+				[]byte(fragment),
+				data[tag.Body.Start:]),
+			sync.Mutex{},
 		}
 	}
 }
