@@ -39,7 +39,7 @@ eventSource.onmessage = (event) => {
 	location.reload(true);
 };
 </script>`
-const durationOfTime = time.Duration(500) * time.Millisecond
+const duration = time.Duration(500) * time.Millisecond
 
 func eventsHandler(w http.ResponseWriter, r *http.Request) {
 	w.Header().Set("Access-Control-Allow-Origin", "*")
@@ -71,7 +71,7 @@ func updateTimer(c *Context) {
 		c.timer.Stop()
 	}
 
-	c.timer = time.AfterFunc(durationOfTime, func() { resetTimer(c) })
+	c.timer = time.AfterFunc(duration, func() { resetTimer(c) })
 }
 
 func handleWatcherEvents(c *Context) {
