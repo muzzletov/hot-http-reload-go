@@ -39,7 +39,7 @@ eventSource.onmessage = (event) => {
 	location.reload(true);
 };
 </script>`
-const duration = time.Duration(500) * time.Millisecond
+const duration = time.Duration(50) * time.Millisecond
 
 func eventsHandler(w http.ResponseWriter, r *http.Request) {
 	w.Header().Set("Access-Control-Allow-Origin", "*")
@@ -66,12 +66,12 @@ func resetTimer(c *Context) {
 	reload <- true
 }
 
-func updateTimer(c *Context) {
+func updateTimer(c *Context, callback func()) {
 	if c.timer != nil {
 		c.timer.Stop()
 	}
 
-	c.timer = time.AfterFunc(duration, func() { resetTimer(c) })
+	c.timer = time.AfterFunc(duration, callback)
 }
 
 func handleWatcherEvents(c *Context) {
@@ -87,8 +87,7 @@ func handleWatcherEvents(c *Context) {
 
 			if writeEvent || createEvent {
 				mappedFilename := event.Name[len(c.config.directory)+1:]
-				addFragment(c, mappedFilename)
-				updateTimer(c)
+				updateTimer(c, func() { addFragment(c, mappedFilename); resetTimer(c) })
 			}
 		case _, ok := <-c.watcher.Errors:
 			if !ok {
@@ -132,12 +131,13 @@ func cache(c *Context, files []string) {
 		if endswith(file, suffix) {
 			println("caching", file)
 			addFragment(c, file)
-
 		}
 	}
 }
 
 func addFragment(c *Context, file string) {
+	println("updating", file)
+
 	data, err := os.ReadFile(c.config.directory + "/" + file)
 
 	if err != nil {
@@ -223,7 +223,6 @@ func main() {
 			http.ServeFile(w, r, context.config.directory+r.URL.Path)
 		}
 	})
-
 	http.HandleFunc("/events", eventsHandler)
 
 	addr := ":8080"
