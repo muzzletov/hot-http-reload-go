@@ -32,9 +32,9 @@ type Configuration struct {
 
 var reload = make(chan bool, 1)
 
-const fragment = `<script>
-const eventSource = new EventSource('http://localhost:8080/events');
-eventSource.onmessage = (event) => {
+const fragment = "<script>" +
+"const eventSource = new EventSource(`${window.location.protocol}//${window.location.hostname}:${window.location.port}/events`);"+
+`eventSource.onmessage = (event) => {
 	eventSource.close();
 	location.reload(true);
 };
